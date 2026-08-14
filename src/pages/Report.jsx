@@ -1,50 +1,40 @@
-import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import Swal from 'sweetalert2'
 import {
   FaFilePdf,
   FaArrowLeft,
-  FaArrowRight,
-  FaBrain,
-  FaChartBar,
+  FaChevronLeft,
+  FaChevronRight,
+  FaFile,
   FaDownload,
   FaShare,
   FaSave,
-  FaRobot,
-  FaMagic,
   FaSpinner,
   FaCheckCircle,
-  FaExclamationTriangle,
-  FaClock,
-  FaFileAlt,
-  FaQuestionCircle,
-  FaPaperPlane,
-  FaChartLine,
-  FaTable,
-  FaCode,
-  FaInfoCircle,
-  FaFileInvoice,
-  FaEye,
-  FaRocket,
-  FaDatabase,
-  FaBook,
-  FaGavel,
   FaList,
-  FaScroll,
-  FaSearch,
-  FaExpand,
-  FaThumbsUp,
-  FaLightbulb,
-  FaChevronLeft,
-  FaChevronRight,
-  FaPrint,
-  FaFile,
   FaTextHeight,
+  FaClock,
   FaCopy,
+  FaPrint,
   FaMinus,
-  FaPlus
+  FaPlus,
+  FaGoogle,
+  FaPaperPlane,
+  FaRobot,
+  FaCheck,
+  FaTimes,
+  FaExclamationTriangle,
+  FaInfoCircle,
+  FaSearch,
+  FaEye,
+  FaBook,
+  FaChartBar,
+  FaDatabase,
+  FaUser,
+  FaKey,
+  FaUpload
 } from 'react-icons/fa'
 import './Report.css'
 
@@ -61,25 +51,64 @@ function Report() {
     file: null
   }
   
-  const [question, setQuestion] = useState('')
-  const [messages, setMessages] = useState([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('analysis')
-  const [reportData, setReportData] = useState(null)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [isAnalyzing, setIsAnalyzing] = useState(true)
-  const [pdfText, setPdfText] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
   const [pdfPages, setPdfPages] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(0)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [extractedText, setExtractedText] = useState('')
   const [fontSize, setFontSize] = useState(16)
-  const messagesEndRef = useRef(null)
+  const [fileName, setFileName] = useState('')
+  const [fullText, setFullText] = useState('')
+  
+  // Gemini states
+  const [question, setQuestion] = useState('')
+  const [messages, setMessages] = useState([])
+  const [isGeminiLoading, setIsGeminiLoading] = useState(false)
+  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || '')
+  const [showApiKeyInput, setShowApiKeyInput] = useState(!apiKey)
+  const [tempApiKey, setTempApiKey] = useState('')
+  const [apiError, setApiError] = useState('')
 
-  // Show SweetAlert
-  const showAlert = (type, title, message) => {
+  // ============================================
+  // SWEETALERT HELPERS
+  // ============================================
+  
+  const showAlert = (type, title, message, options = {}) => {
+    const icons = {
+      success: 'success',
+      error: 'error',
+      warning: 'warning',
+      info: 'info',
+      question: 'question'
+    }
+    
+    return Swal.fire({
+      icon: icons[type] || 'info',
+      title: title,
+      text: message,
+      confirmButtonColor: '#667eea',
+      confirmButtonText: options.confirmText || 'OK',
+      background: '#ffffff',
+      backdrop: 'rgba(0,0,0,0.4)',
+      ...options
+    })
+  }
+
+  const showConfirm = (title, message, confirmText = 'Confirm', cancelText = 'Cancel') => {
+    return Swal.fire({
+      title: title,
+      text: message,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#667eea',
+      cancelButtonColor: '#d33',
+      confirmButtonText: confirmText,
+      cancelButtonText: cancelText,
+      background: '#ffffff',
+      backdrop: 'rgba(0,0,0,0.4)'
+    })
+  }
+
+  const showToast = (type, title, message, duration = 3000) => {
     const icons = {
       success: 'success',
       error: 'error',
@@ -87,14 +116,22 @@ function Report() {
       info: 'info'
     }
     
-    Swal.fire({
+    const Toast = Swal.mixin({
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: duration,
+      timerProgressBar: true,
+      didOpen: (toast) => {
+        toast.onmouseenter = Swal.stopTimer
+        toast.onmouseleave = Swal.resumeTimer
+      }
+    })
+    
+    Toast.fire({
       icon: icons[type] || 'info',
       title: title,
-      text: message,
-      confirmButtonColor: '#667eea',
-      confirmButtonText: 'OK',
-      background: '#ffffff',
-      backdrop: 'rgba(0,0,0,0.4)'
+      text: message
     })
   }
 
@@ -102,13 +139,14 @@ function Report() {
   const extractTextFromPDF = async (file) => {
     try {
       console.log('📄 Extracting text from PDF:', file.name)
+      setFileName(file.name)
       
       const arrayBuffer = await file.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
       setTotalPages(pdf.numPages)
       
-      let fullText = ''
       const pages = []
+      let allText = ''
       
       for (let i = 1; i <= pdf.numPages; i++) {
         try {
@@ -121,12 +159,12 @@ function Report() {
             length: pageText.length,
             wordCount: pageText.split(/\s+/).filter(w => w.length > 0).length
           })
-          fullText += pageText + ' '
+          allText += pageText + ' '
         } catch (pageError) {
           console.warn(`⚠️ Could not read page ${i}:`, pageError)
           pages.push({
             pageNumber: i,
-            text: '[Could not extract text from this page]',
+            text: '',
             length: 0,
             wordCount: 0
           })
@@ -134,370 +172,303 @@ function Report() {
       }
       
       setPdfPages(pages)
-      setPdfText(fullText)
-      setExtractedText(fullText)
+      setFullText(allText)
+      setIsLoading(false)
       
-      console.log('✅ Extracted text length:', fullText.length)
-      console.log('📄 Pages extracted:', pages.length)
+      console.log('PDF loaded:', pages.length, 'pages')
+      console.log('Total text length:', allText.length)
       
-      analyzePDFContent(fullText, pages, pdf.numPages)
+      // Add welcome message
+      if (apiKey) {
+        setMessages([{
+          type: 'ai',
+          content: `PDF loaded! I've read **${pages.length} pages** (${allText.split(/\s+/).filter(w => w.length > 0).length.toLocaleString()} words). Ask me anything about this document!`,
+          timestamp: new Date().toLocaleTimeString()
+        }])
+      }
       
-      return { fullText, pages }
+      showToast('success', 'PDF Loaded', `${pages.length} pages extracted successfully!`)
+      
+      return { pages }
     } catch (error) {
       console.error('❌ Error extracting PDF:', error)
-      setIsAnalyzing(false)
+      setIsLoading(false)
+      showAlert('error', 'Error Reading PDF', 'Failed to read PDF. Please try again with a different file.')
+    }
+  }
+
+  // ============================================
+  // GEMINI API
+  // ============================================
+
+  // Find relevant sections of the document based on the question
+  const findRelevantContext = (userQuestion, fullText) => {
+    // If the question mentions a specific section number like "10.3.2.4"
+    const sectionMatch = userQuestion.match(/(\d+\.\d+(?:\.\d+)?(?:\.\d+)?)/)
+    if (sectionMatch) {
+      const sectionNumber = sectionMatch[1]
+      console.log(`🔍 Looking for section: ${sectionNumber}`)
       
-      showAlert(
-        'error',
-        '⚠️ Error Reading PDF',
-        'Error reading PDF file.\n\nPossible issues:\n• The PDF may be password protected\n• The PDF may be corrupted\n• The PDF may be scanned without text\n\nTry uploading a different PDF file.'
-      )
+      // Find all occurrences of this section number in the text
+      const sections = []
+      const regex = new RegExp(`\\b${sectionNumber}\\b[^.]*\\.[^\\n]{10,800}`, 'gi')
+      let match
+      while ((match = regex.exec(fullText)) !== null) {
+        sections.push(match[0])
+      }
       
-      setReportData({
-        title: fileData.fileName?.replace('.pdf', '') || 'Document',
-        type: 'Document',
-        author: 'Unknown',
-        year: '2024',
-        description: 'Could not extract text from this PDF.',
-        summary: 'This PDF could not be read.',
-        chapters: [],
-        keyPoints: ['Unable to extract text from this PDF'],
-        entities: ['PDF Error'],
-        stats: {
-          pages: 0,
-          words: 0,
-          characters: 0,
-          sentences: 0,
-          paragraphs: 0,
-          uniqueWords: 0,
-          averageWordLength: 0,
-          readingTime: 0
-        },
-        keyRules: []
-      })
-    }
-  }
-
-  // Analyze PDF content
-  const analyzePDFContent = (text, pages, totalPages) => {
-    setIsAnalyzing(true)
-    
-    if (!text || text.trim().length === 0) {
-      setIsAnalyzing(false)
-      setReportData({
-        title: fileData.fileName?.replace('.pdf', '') || 'Document',
-        type: 'Document',
-        author: 'Unknown',
-        year: '2024',
-        description: 'No text could be extracted.',
-        summary: 'This document appears to be scanned or contains no selectable text.',
-        chapters: [],
-        keyPoints: ['No text content found in this PDF'],
-        entities: ['PDF', 'Document'],
-        stats: {
-          pages: totalPages || 1,
-          words: 0,
-          characters: 0,
-          sentences: 0,
-          paragraphs: 0,
-          uniqueWords: 0,
-          averageWordLength: 0,
-          readingTime: 0
-        },
-        keyRules: []
-      })
-      return
+      if (sections.length > 0) {
+        return sections.join('\n\n')
+      }
+      
+      // Try a more flexible search
+      const flexibleRegex = new RegExp(`\\b${sectionNumber}\\s+([^\\n]{10,800})`, 'gi')
+      while ((match = flexibleRegex.exec(fullText)) !== null) {
+        sections.push(match[0])
+      }
+      
+      if (sections.length > 0) {
+        return sections.join('\n\n')
+      }
     }
     
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
-    const words = text.split(/\s+/).filter(w => w.length > 0)
-    const uniqueWords = [...new Set(words.map(w => w.toLowerCase()))]
-    
-    const commonWords = ['the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me', 'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year', 'your', 'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even', 'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us']
-    
-    const wordsArray = text.split(/\s+/).filter(w => w.length > 3 && !commonWords.includes(w.toLowerCase()))
-    const wordFrequency = {}
-    wordsArray.forEach(w => {
-      const lower = w.toLowerCase()
-      wordFrequency[lower] = (wordFrequency[lower] || 0) + 1
-    })
-    
-    const sortedWords = Object.entries(wordFrequency)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 20)
-      .map(([word]) => word)
-    
-    const capitalizedPhrases = text.match(/[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/g) || []
-    const uniquePhrases = [...new Set(capitalizedPhrases)].slice(0, 15)
-    
-    let fullSummary = ''
-    if (sentences.length > 0) {
-      const summarySentences = sentences.slice(0, Math.min(5, sentences.length)).join(' ')
-      fullSummary = summarySentences
-    } else {
-      fullSummary = text.substring(0, 500) + (text.length > 500 ? '...' : '')
+    // If the question mentions "Chapter 10" or similar
+    const chapterMatch = userQuestion.match(/Chapter\s+(\d+)/i)
+    if (chapterMatch) {
+      const chapterNum = chapterMatch[1]
+      console.log(`🔍 Looking for Chapter: ${chapterNum}`)
+      
+      // Find the chapter in the text
+      const chapterRegex = new RegExp(`Chapter\\s+${chapterNum}[^\\n]*\\n([\\s\\S]{0,20000})`, 'i')
+      const match = fullText.match(chapterRegex)
+      if (match) {
+        return match[0]
+      }
     }
     
-    const keyPoints = sentences
-      .filter(s => s.length > 30 && s.length < 300)
-      .slice(0, 10)
-      .map(s => s.trim())
-    
-    const chapterRegex = /(?:chapter|section|part|article)\s+(\d+)[:\s]+([^\n]+)/gi
-    const chapters = []
-    let match
-    while ((match = chapterRegex.exec(text)) !== null) {
-      chapters.push({
-        number: parseInt(match[1]),
-        title: match[2]?.trim() || `Chapter ${match[1]}`,
-        pages: Math.floor(Math.random() * 3) + 1
-      })
-    }
-    
-    const finalChapters = chapters.length > 0 ? chapters.slice(0, 15) : 
-      Array.from({ length: Math.min(totalPages || 1, 10) }, (_, i) => ({
-        number: i + 1,
-        title: `Section ${i + 1}`,
-        pages: 1
-      }))
-    
-    const entities = [...new Set([
-      ...uniquePhrases.slice(0, 10),
-      ...sortedWords.slice(0, 5)
-    ])]
-    
-    const stats = {
-      pages: totalPages || 1,
-      words: words.length,
-      characters: text.length,
-      sentences: sentences.length,
-      paragraphs: text.split(/\n\s*\n/).length || 1,
-      uniqueWords: uniqueWords.length,
-      averageWordLength: words.length > 0 ? (text.length / words.length).toFixed(1) : 0,
-      readingTime: Math.ceil(words.length / 200) || 1
-    }
-    
-    const keyRules = keyPoints.slice(0, 8).map((point, i) => ({
-      rule: `Key Point ${i + 1}`,
-      value: point.substring(0, 60) + (point.length > 60 ? '...' : '')
-    }))
-    
-    setReportData({
-      title: fileData.fileName?.replace('.pdf', '') || 'Document',
-      type: detectDocumentType(text),
-      author: extractAuthor(text) || 'Unknown Author',
-      year: extractYear(text) || new Date().getFullYear().toString(),
-      description: fullSummary,
-      summary: fullSummary,
-      chapters: finalChapters,
-      keyPoints: keyPoints.length > 0 ? keyPoints : sortedWords.slice(0, 10),
-      entities: entities.length > 0 ? entities : ['Document', 'Content', 'Text'],
-      stats: stats,
-      keyRules: keyRules
-    })
-    
-    setIsAnalyzing(false)
-    console.log('✅ Analysis complete!', { stats, keyPoints: keyPoints.length })
-  }
-
-  // Helper functions
-  const detectDocumentType = (text) => {
-    const lower = text.toLowerCase()
-    if (lower.includes('report')) return 'Report Document'
-    if (lower.includes('policy') || lower.includes('regulation') || lower.includes('rule')) return 'Policy Document'
-    if (lower.includes('research') || lower.includes('study') || lower.includes('analysis')) return 'Research Document'
-    if (lower.includes('contract') || lower.includes('agreement') || lower.includes('terms')) return 'Legal Document'
-    if (lower.includes('invoice') || lower.includes('receipt') || lower.includes('payment')) return 'Financial Document'
-    if (lower.includes('letter') || lower.includes('memo') || lower.includes('correspondence')) return 'Correspondence'
-    return 'Document'
-  }
-
-  const extractAuthor = (text) => {
-    const lines = text.split('\n').filter(line => line.trim().length > 0)
-    for (const line of lines.slice(0, 20)) {
-      const lower = line.toLowerCase()
-      if (lower.includes('author') || lower.includes('by ')) {
-        const parts = line.split(/author|by/i)
-        if (parts.length > 1) {
-          const author = parts[1].trim().substring(0, 50)
-          if (author.length > 2) return author
+    // If no specific section, return a larger chunk around where the question might be
+    // Look for keywords from the question
+    const keywords = userQuestion.split(/\s+/).filter(w => w.length > 4)
+    if (keywords.length > 0) {
+      for (const keyword of keywords) {
+        const keywordRegex = new RegExp(`[^\\n]{0,500}\\b${keyword}\\b[^\\n]{0,500}`, 'gi')
+        const matches = fullText.match(keywordRegex)
+        if (matches && matches.length > 0) {
+          return matches.slice(0, 10).join('\n\n')
         }
       }
     }
-    return null
+    
+    // Fallback: return a larger chunk of text (200,000 chars instead of 50,000)
+    return fullText.substring(0, 200000)
   }
 
-  const extractYear = (text) => {
-    const yearRegex = /\b(19|20)\d{2}\b/g
-    const matches = text.match(yearRegex)
-    if (matches) {
-      const years = matches.map(Number).filter(y => y > 1900 && y < 2100)
-      if (years.length > 0) {
-        const mostCommon = years.sort((a, b) => 
-          years.filter(v => v === a).length - years.filter(v => v === b).length
-        ).pop()
-        return mostCommon?.toString()
-      }
-    }
-    return null
-  }
+  // Call Gemini API with relevant context
+  const callGemini = async (userQuestion, context) => {
+    // Find relevant sections of the document
+    const relevantContext = findRelevantContext(userQuestion, context)
+    
+    console.log(`Sending ${relevantContext.length} characters to Gemini`)
+    
+    const GEMINI_MODEL = 'gemini-3-flash-preview'
+    
+    const prompt = `You are a helpful assistant that answers questions based ONLY on the provided document content.
 
-  const findAnswerInPDF = (userQuestion) => {
-    if (!extractedText || extractedText.length === 0) {
-      return "⚠️ No document content available."
-    }
+DOCUMENT CONTENT (extracted from PDF):
+${relevantContext}
 
-    const q = userQuestion.toLowerCase().trim()
-    const sentences = extractedText.match(/[^.!?]+[.!?]+/g) || []
-    
-    if (sentences.length === 0) {
-      return "📄 Couldn't find specific sentences to answer your question."
-    }
+USER QUESTION: ${userQuestion}
 
-    const questionWords = q.split(/\s+/).filter(w => w.length > 2)
-    
-    const scoredSentences = sentences.map(sentence => {
-      let score = 0
-      const sentenceLower = sentence.toLowerCase()
-      
-      if (sentenceLower.includes(q)) {
-        score += 20
-      }
-      
-      questionWords.forEach(word => {
-        if (sentenceLower.includes(word)) {
-          score += 3
-        }
-      })
-      
-      const sentenceWords = sentenceLower.split(/\s+/)
-      const overlap = sentenceWords.filter(w => questionWords.includes(w)).length
-      score += overlap * 2
-      score += Math.min(sentenceWords.length / 10, 5)
-      
-      return { sentence, score }
-    })
-    
-    const relevantSentences = scoredSentences
-      .filter(s => s.score > 2)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map(s => s.sentence.trim())
-    
-    if (relevantSentences.length > 0) {
-      let response = "**📄 Found in your document:**\n\n"
-      relevantSentences.forEach((s, i) => {
-        response += `${i + 1}. ${s}\n\n`
-      })
-      return response
-    }
-    
-    const sampleText = extractedText.substring(0, 500)
-    return `**📄 Document Content:**\n\nI couldn't find a direct match for "${userQuestion}" in the document. Here's what the document contains:\n\n${sampleText}...\n\n💡 **Tip:** Try asking about specific words or phrases that appear in the document.`
-  }
+INSTRUCTIONS:
+1. Answer based ONLY on the document content above.
+2. If the answer isn't in the document, say "I couldn't find that in the document."
+3. Quote relevant sections when applicable.
+4. Be clear and concise.
+5. If the user asks about a specific clause number (like 10.3.2.4), find and quote the exact text.
 
-  // Load PDF on mount
-  useEffect(() => {
-    const loadPDF = async () => {
-      console.log('📄 Loading PDF...', { fileData })
-      
-      if (location.state?.file) {
-        console.log('✅ Found file object, extracting text...')
-        await extractTextFromPDF(location.state.file)
-      } else if (fileData.fileName) {
-        console.log('⚠️ No file object found, showing sample data')
-        const sampleText = `Please upload a valid PDF file to analyze.`
-        const mockPages = [{ pageNumber: 1, text: sampleText, length: sampleText.length, wordCount: 0 }]
-        setPdfPages(mockPages)
-        setPdfText(sampleText)
-        setExtractedText(sampleText)
-        setTotalPages(1)
-        setIsAnalyzing(false)
-        setReportData({
-          title: 'No PDF Loaded',
-          type: 'Information',
-          author: 'System',
-          year: '2024',
-          description: 'Please go back and upload a PDF file.',
-          summary: 'No PDF file was uploaded.',
-          chapters: [],
-          keyPoints: ['Upload a PDF file to get started'],
-          entities: ['PDF', 'Upload', 'Document'],
-          stats: {
-            pages: 1,
-            words: 0,
-            characters: 0,
-            sentences: 0,
-            paragraphs: 0,
-            uniqueWords: 0,
-            averageWordLength: 0,
-            readingTime: 0
+ANSWER:`
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          keyRules: []
-        })
-      } else {
-        setIsAnalyzing(false)
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: prompt
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 8192,
+              topP: 0.95,
+            }
+          })
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Gemini API Error:', errorData)
+        const errorMsg = errorData.error?.message || 'Unknown error'
+        
+        if (errorMsg.includes('not found')) {
+          console.log('🔄 Model not found, trying fallback models...')
+          return callGeminiWithFallback(userQuestion, relevantContext)
+        }
+        
+        return { 
+          success: false, 
+          error: `API Error: ${errorMsg}` 
+        }
+      }
+
+      const data = await response.json()
+      const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.'
+      console.log('Gemini response received!')
+      return { success: true, answer, model: GEMINI_MODEL }
+    } catch (error) {
+      console.error('Gemini Error:', error)
+      console.log('Network error, trying fallback models...')
+      return callGeminiWithFallback(userQuestion, relevantContext)
+    }
+  }
+
+  // Fallback models
+  const callGeminiWithFallback = async (userQuestion, context) => {
+    const fallbackModels = [
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro',
+      'gemini-pro'
+    ]
+
+    for (const model of fallbackModels) {
+      try {
+        console.log(`🔄 Trying fallback model: ${model}`)
+        
+        const prompt = `You are a helpful assistant that answers questions based ONLY on the provided document content.
+
+DOCUMENT CONTENT (extracted from PDF):
+${context}
+
+USER QUESTION: ${userQuestion}
+
+INSTRUCTIONS:
+1. Answer based ONLY on the document content above.
+2. If the answer isn't in the document, say "I couldn't find that in the document."
+3. Quote relevant sections when applicable.
+4. Be clear and concise.
+
+ANSWER:`
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: prompt
+                }]
+              }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 4096,
+                topP: 0.95,
+              }
+            })
+          }
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.'
+          console.log(`Fallback model ${model} worked!`)
+          return { success: true, answer, model: model }
+        }
+      } catch (error) {
+        console.warn(`Fallback ${model} failed:`, error.message)
       }
     }
-    
-    loadPDF()
-  }, [location.state])
 
-  // Search functionality
-  const handleSearch = () => {
-    if (!searchTerm.trim()) {
-      setSearchResults([])
+    return { 
+      success: false, 
+      error: 'All models failed. Please check your API key and try again.' 
+    }
+  }
+
+  // Handle asking a question
+  const handleAskQuestion = async () => {
+    if (!question.trim()) {
+      showAlert('warning', 'Empty Question', 'Please enter a question before asking.')
       return
     }
     
-    const results = []
-    const searchLower = searchTerm.toLowerCase()
-    pdfPages.forEach(page => {
-      const textLower = page.text.toLowerCase()
-      let index = textLower.indexOf(searchLower)
-      while (index !== -1) {
-        const start = Math.max(0, index - 60)
-        const end = Math.min(page.text.length, index + searchTerm.length + 60)
-        results.push({
-          page: page.pageNumber,
-          text: (start > 0 ? '...' : '') + page.text.substring(start, end) + (end < page.text.length ? '...' : '')
-        })
-        index = textLower.indexOf(searchLower, index + 1)
+    if (!apiKey) {
+      const result = await showConfirm(
+        'API Key Required',
+        'Please enter your Gemini API key first.',
+        'Add API Key',
+        'Cancel'
+      )
+      if (result.isConfirmed) {
+        setShowApiKeyInput(true)
       }
-    })
-    setSearchResults(results)
-  }
-
-  // Scroll to bottom of messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // Handle question submission
-  const handleAskQuestion = () => {
-    if (!question.trim()) return
+      return
+    }
     
+    if (!fullText || fullText.length < 10) {
+      showAlert('warning', 'No PDF Content', 'Please upload a PDF file first.')
+      return
+    }
+
     const userQuestion = question.trim()
     
+    // Add user message
     setMessages(prev => [...prev, { 
       type: 'user', 
       content: userQuestion,
       timestamp: new Date().toLocaleTimeString()
     }])
     
-    setIsLoading(true)
     setQuestion('')
+    setIsGeminiLoading(true)
+    setApiError('')
 
-    setTimeout(() => {
-      const answer = findAnswerInPDF(userQuestion)
+    try {
+      const result = await callGemini(userQuestion, fullText)
       
+      if (result.success) {
+        setMessages(prev => [...prev, { 
+          type: 'ai', 
+          content: result.answer + `\n\n*( ${result.model})*`,
+          timestamp: new Date().toLocaleTimeString()
+        }])
+      } else {
+        setApiError(result.error)
+        setMessages(prev => [...prev, { 
+          type: 'ai', 
+          content: `⚠️ ${result.error}\n\n💡 If you're using the gemini-3-flash-preview model, make sure:\n1. You have access to the preview model\n2. Your API key is valid\n3. You're in a region where the model is available\n\nTry using a different model like gemini-1.5-flash which is more widely available.`,
+          timestamp: new Date().toLocaleTimeString()
+        }])
+      }
+    } catch (error) {
       setMessages(prev => [...prev, { 
         type: 'ai', 
-        content: answer,
+        content: `⚠️ Something went wrong: ${error.message}`,
         timestamp: new Date().toLocaleTimeString()
       }])
-      setIsLoading(false)
-    }, 800)
+    } finally {
+      setIsGeminiLoading(false)
+    }
   }
 
   // Handle key press
@@ -508,6 +479,28 @@ function Report() {
     }
   }
 
+  // Save API key
+  const saveApiKey = () => {
+    if (tempApiKey.trim()) {
+      setApiKey(tempApiKey.trim())
+      setShowApiKeyInput(false)
+      localStorage.setItem('gemini_api_key', tempApiKey.trim())
+      showToast('success', 'API Key Saved', 'Gemini API key saved successfully!')
+      setTempApiKey('')
+    } else {
+      showAlert('warning', 'Invalid Key', 'Please enter a valid API key.')
+    }
+  }
+
+  // Load saved API key on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key')
+    if (savedKey) {
+      setApiKey(savedKey)
+      setShowApiKeyInput(false)
+    }
+  }, [])
+
   // Format file size
   const formatFileSize = (bytes) => {
     if (!bytes) return 'Unknown size'
@@ -516,599 +509,636 @@ function Report() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  // Handle page change
-  const goToPage = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page)
-    }
+  // Page navigation
+  const goToPrevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1)
   }
 
   const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1)
-    }
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1)
   }
 
-  const goToPrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1)
-    }
-  }
+  const goToFirstPage = () => setCurrentPage(1)
+  const goToLastPage = () => setCurrentPage(totalPages)
 
-  const goToFirstPage = () => {
-    setCurrentPage(1)
-  }
-
-  const goToLastPage = () => {
-    setCurrentPage(totalPages)
-  }
-
-  // Keyboard shortcuts for pages
+  // Load PDF on mount
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (activeTab !== 'pages') return
-      
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault()
-        goToNextPage()
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        goToPrevPage()
+    const loadPDF = async () => {
+      if (location.state?.file) {
+        await extractTextFromPDF(location.state.file)
+      } else {
+        setIsLoading(false)
       }
     }
     
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentPage, totalPages, activeTab])
+    loadPDF()
+  }, [location.state])
 
-  // Check if we have real content
-  const hasRealContent = extractedText && extractedText.length > 0 && !extractedText.includes('Please upload a valid PDF')
+  // Calculate total words and reading time
+  const totalWords = pdfPages.reduce((sum, page) => sum + (page.wordCount || 0), 0)
+  const readingTime = Math.ceil(totalWords / 200) || 1
+
+  // Handle Save button
+  const handleSave = async () => {
+    const result = await showConfirm(
+      'Save Document',
+      'Are you sure you want to save this document?',
+      'Save',
+      'Cancel'
+    )
+    if (result.isConfirmed) {
+      showToast('success', 'Saved!', 'Document saved successfully.')
+    }
+  }
+
+  // Handle Export button
+  const handleExport = async () => {
+    const result = await showConfirm(
+      'Export Document',
+      'Export the current document as a report?',
+      'Export',
+      'Cancel'
+    )
+    if (result.isConfirmed) {
+      showToast('success', 'Exporting...', 'Report export started!')
+    }
+  }
+
+  // Handle Share button
+  const handleShare = async () => {
+    const result = await showConfirm(
+      'Share Document',
+      'Generate a shareable link for this document?',
+      'Generate Link',
+      'Cancel'
+    )
+    if (result.isConfirmed) {
+      showToast('success', 'Link Copied!', 'Share link copied to clipboard.')
+    }
+  }
 
   return (
-    <div className="report-container">
+    <div className="report-container" style={{ background: '#f5f7fa', minHeight: '100vh' }}>
+      
       {/* Header */}
-      <header className="report-header">
-        <div className="report-header-content">
-          <div className="header-left">
-            <button className="back-btn" onClick={() => navigate('/')}>
-              <FaArrowLeft size={20} />
+      <header style={{
+        background: '#fff',
+        borderBottom: '1px solid #e0e4e8',
+        padding: '12px 24px',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          maxWidth: '1200px',
+          margin: '0 auto',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate('/')}
+              style={{
+                padding: '8px 14px',
+                background: 'transparent',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                color: '#333',
+                fontSize: '14px'
+              }}
+            >
+              <FaArrowLeft size={16} />
               Back
             </button>
-            <div className="file-info">
-              <FaFilePdf size={28} className="file-icon-header" />
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <FaFilePdf size={28} style={{ color: '#FF6B6B' }} />
               <div>
-                <h1 className="file-name-header" style={{ color: '#1a1a2e' }}>
-                  {fileData.fileName || 'document.pdf'}
-                </h1>
-                <p className="file-meta" style={{ color: '#5a5a7a' }}>
-                  {formatFileSize(fileData.fileSize)} · PDF Document · {totalPages} pages
-                  {hasRealContent && ` · ${reportData?.stats?.words || 0} words`}
-                </p>
+                <div style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '14px' }}>
+                  {fileName || fileData.fileName || 'document.pdf'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#5a5a7a' }}>
+                  {totalPages} pages · {formatFileSize(fileData.fileSize)}
+                  {totalWords > 0 && ` · ${totalWords.toLocaleString()} words`}
+                </div>
               </div>
             </div>
           </div>
-          <div className="header-actions">
-            <button className="header-btn" onClick={() => showAlert('success', '✅ Saved!', 'Document saved successfully.')}>
-              <FaSave size={18} />
+          
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {apiKey ? (
+              <span style={{ 
+                fontSize: '12px', 
+                color: '#4ECDC4',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                background: 'rgba(78, 205, 196, 0.1)',
+                borderRadius: '12px'
+              }}>
+                <FaGoogle size={12} /> Chatbot Ready
+              </span>
+            ) : (
+              <button 
+                onClick={() => setShowApiKeyInput(true)}
+                style={{
+                  padding: '4px 12px',
+                  background: '#F9CA24',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  color: '#333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <FaKey size={12} /> Add API Key
+              </button>
+            )}
+            
+            <button 
+              onClick={handleSave}
+              style={{
+                padding: '6px 12px',
+                background: 'transparent',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#333',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FaSave size={14} />
               Save
             </button>
-            <button className="header-btn" onClick={() => {
-              setIsGenerating(true)
-              setTimeout(() => {
-                setIsGenerating(false)
-                showAlert('success', '✅ Report Generated!', `Document: ${fileData.fileName}\nPages: ${totalPages}\nWords: ${reportData?.stats?.words || 0}`)
-              }, 3000)
-            }}>
-              {isGenerating ? <FaSpinner className="spinning" size={18} /> : <FaDownload size={18} />}
-              {isGenerating ? 'Generating...' : 'Export'}
+            <button 
+              onClick={handleExport}
+              style={{
+                padding: '6px 12px',
+                background: 'transparent',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#333',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FaDownload size={14} />
+              Export
             </button>
-            <button className="header-btn" onClick={() => showAlert('info', '🔗 Copied!', 'Share link copied to clipboard.')}>
-              <FaShare size={18} />
+            <button 
+              onClick={handleShare}
+              style={{
+                padding: '6px 12px',
+                background: 'transparent',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#333',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FaShare size={14} />
               Share
             </button>
           </div>
         </div>
       </header>
 
-      {/* File Preview Banner */}
-      <div className="file-preview-banner">
-        <div className="file-preview-content">
-          <FaFilePdf size={32} className="preview-icon" style={{ color: '#FF6B6B' }} />
-          <div className="preview-info">
-            <span className="preview-name" style={{ color: '#1a1a2e' }}>
-              {fileData.fileName || 'Document'}
-            </span>
-            <span className="preview-size" style={{ color: '#5a5a7a' }}>
-              {totalPages} pages · {formatFileSize(fileData.fileSize)}
-              {hasRealContent && ` · ${reportData?.stats?.words || 0} words`}
-            </span>
-          </div>
-          <div className="preview-status">
-            {isAnalyzing ? (
-              <>
-                <FaSpinner className="spinning status-icon" style={{ color: '#667eea' }} />
-                <span style={{ color: '#5a5a7a' }}>Analyzing...</span>
-              </>
-            ) : (
-              <>
-                <FaCheckCircle size={16} className="status-icon" style={{ color: '#4ECDC4' }} />
-                <span style={{ color: '#5a5a7a' }}>
-                  {hasRealContent ? `${reportData?.stats?.words || 0} words extracted` : 'No text content'}
-                </span>
-              </>
-            )}
-          </div>
-          <button className="preview-view-btn" onClick={() => {
-            if (totalPages > 0) {
-              showAlert('info', '📄 Document Details', `Document: ${fileData.fileName}\nPages: ${totalPages}\nWords: ${reportData?.stats?.words || 0}\nSentences: ${reportData?.stats?.sentences || 0}`)
-            }
-          }}>
-            <FaEye size={16} />
-            View Details
-          </button>
-        </div>
-      </div>
-
       {/* Main Content */}
-      <div className="report-main">
-        {/* Tabs */}
-        <div className="report-tabs">
-          <button 
-            className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analysis')}
-          >
-            <FaBrain size={16} />
-            Analysis
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'qa' ? 'active' : ''}`}
-            onClick={() => setActiveTab('qa')}
-          >
-            <FaQuestionCircle size={16} />
-            Q&A Chat
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'visuals' ? 'active' : ''}`}
-            onClick={() => setActiveTab('visuals')}
-          >
-            <FaChartBar size={16} />
-            Visualizations
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'pages' ? 'active' : ''}`}
-            onClick={() => setActiveTab('pages')}
-          >
-            <FaBook size={16} />
-            Pages
-          </button>
-        </div>
-
-        {/* Tab Content - Analysis */}
-        {activeTab === 'analysis' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="analysis-content"
-          >
-            {isAnalyzing ? (
-              <div className="loading-state">
-                <FaSpinner className="spinning" size={40} style={{ color: '#667eea' }} />
-                <p style={{ color: '#5a5a7a' }}>Analyzing your document...</p>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+        
+        {/* API Key Input Modal */}
+        {showApiKeyInput && (
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '20px 24px',
+            marginBottom: '20px',
+            border: '2px solid #F9CA24',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <FaGoogle size={24} style={{ color: '#4285F4' }} />
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a2e' }}>
+                  Enter Gemini API Key
+                </div>
+                <div style={{ fontSize: '12px', color: '#5a5a7a' }}>
+                  Get your free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#667eea' }}>aistudio.google.com/apikey</a>
+                </div>
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
+                  <FaInfoCircle size={11} style={{ marginRight: '4px' }} />
+                  Using model: gemini-3-flash-preview (with fallback to other models)
+                </div>
               </div>
-            ) : reportData ? (
-              <>
-                <div className="analysis-card doc-header-card">
-                  <div className="doc-header-content">
-                    <div className="doc-type-badge" style={{ background: 'rgba(102, 126, 234, 0.1)', color: '#667eea' }}>
-                      <FaScroll size={16} />
-                      {reportData.type}
-                    </div>
-                    <h2 className="doc-title" style={{ color: '#1a1a2e' }}>{reportData.title}</h2>
-                    <div className="doc-meta-info">
-                      <span style={{ color: '#5a5a7a' }}><FaBook size={14} style={{ color: '#667eea' }} /> {reportData.author}</span>
-                      <span style={{ color: '#5a5a7a' }}><FaClock size={14} style={{ color: '#667eea' }} /> {reportData.year}</span>
-                      <span style={{ color: '#5a5a7a' }}><FaFileAlt size={14} style={{ color: '#667eea' }} /> {reportData.stats.pages} Pages</span>
-                      <span style={{ color: '#5a5a7a' }}><FaDatabase size={14} style={{ color: '#667eea' }} /> {reportData.stats.words.toLocaleString()} Words</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="analysis-card summary-card">
-                  <h3 style={{ color: '#1a1a2e' }}><FaMagic size={18} className="card-icon" style={{ color: '#667eea' }} /> Document Summary</h3>
-                  <p style={{ color: '#333' }}>{reportData.summary}</p>
-                </div>
-                <div className="stats-grid-report">
-                  <div className="stat-item">
-                    <FaFileAlt size={20} className="stat-icon-report" style={{ color: '#667eea' }} />
-                    <div className="stat-info">
-                      <span className="stat-value" style={{ color: '#1a1a2e' }}>{reportData.stats.pages}</span>
-                      <span className="stat-label" style={{ color: '#5a5a7a' }}>Pages</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <FaChartLine size={20} className="stat-icon-report" style={{ color: '#667eea' }} />
-                    <div className="stat-info">
-                      <span className="stat-value" style={{ color: '#1a1a2e' }}>{reportData.stats.words.toLocaleString()}</span>
-                      <span className="stat-label" style={{ color: '#5a5a7a' }}>Words</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <FaList size={20} className="stat-icon-report" style={{ color: '#667eea' }} />
-                    <div className="stat-info">
-                      <span className="stat-value" style={{ color: '#1a1a2e' }}>{reportData.stats.sentences}</span>
-                      <span className="stat-label" style={{ color: '#5a5a7a' }}>Sentences</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <FaClock size={20} className="stat-icon-report" style={{ color: '#667eea' }} />
-                    <div className="stat-info">
-                      <span className="stat-value" style={{ color: '#1a1a2e' }}>{reportData.stats.readingTime} min</span>
-                      <span className="stat-label" style={{ color: '#5a5a7a' }}>Reading Time</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <FaCode size={20} className="stat-icon-report" style={{ color: '#667eea' }} />
-                    <div className="stat-info">
-                      <span className="stat-value" style={{ color: '#1a1a2e' }}>{reportData.stats.uniqueWords}</span>
-                      <span className="stat-label" style={{ color: '#5a5a7a' }}>Unique Words</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <FaTable size={20} className="stat-icon-report" style={{ color: '#667eea' }} />
-                    <div className="stat-info">
-                      <span className="stat-value" style={{ color: '#1a1a2e' }}>{reportData.stats.paragraphs}</span>
-                      <span className="stat-label" style={{ color: '#5a5a7a' }}>Paragraphs</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="analysis-card key-points-card">
-                  <h3 style={{ color: '#1a1a2e' }}><FaCheckCircle size={18} className="card-icon" style={{ color: '#667eea' }} /> Key Points</h3>
-                  <ul className="key-points-list">
-                    {reportData.keyPoints.map((point, index) => (
-                      <motion.li key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} style={{ color: '#333' }}>
-                        <span className="point-bullet" style={{ color: '#667eea' }}>•</span>
-                        {point}
-                      </motion.li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="analysis-card entities-card">
-                  <h3 style={{ color: '#1a1a2e' }}><FaRobot size={18} className="card-icon" style={{ color: '#667eea' }} /> Key Terms</h3>
-                  <div className="entities-tags">
-                    {reportData.entities.map((entity, index) => (
-                      <span key={index} className="entity-tag" style={{ background: 'rgba(102, 126, 234, 0.1)', color: '#667eea' }}>
-                        {entity}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="error-state">
-                <FaExclamationTriangle size={40} style={{ color: '#F9CA24' }} />
-                <p style={{ color: '#5a5a7a' }}>No document loaded.</p>
-              </div>
-            )}
-          </motion.div>
+              <input 
+                type="password"
+                placeholder="Paste your API key here..."
+                value={tempApiKey}
+                onChange={(e) => setTempApiKey(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  outline: 'none',
+                  color: '#1a1a2e',
+                  backgroundColor: '#fff'
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') saveApiKey()
+                }}
+              />
+              <button 
+                onClick={saveApiKey}
+                style={{
+                  padding: '8px 20px',
+                  background: '#4285F4',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                Save Key
+              </button>
+              <button 
+                onClick={() => setShowApiKeyInput(false)}
+                style={{
+                  padding: '8px 14px',
+                  background: 'transparent',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  color: '#333'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* Q&A Chat Tab */}
-        {activeTab === 'qa' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="qa-content"
-          >
-            <div className="chat-container">
-              <div className="chat-messages">
+        {/* Loading State */}
+        {isLoading && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '60px 20px',
+            background: '#fff',
+            borderRadius: '12px',
+            border: '1px solid #e8ecf1'
+          }}>
+            <FaSpinner className="spinning" size={40} style={{ color: '#667eea' }} />
+            <p style={{ color: '#5a5a7a', marginTop: '16px' }}>Loading PDF...</p>
+          </div>
+        )}
+
+        {/* Two Column Layout: PDF Viewer + Chat */}
+        {!isLoading && pdfPages.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            
+            {/* Left Column - PDF Viewer */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              border: '1px solid #e8ecf1',
+              overflow: 'hidden',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+            }}>
+              {/* Page Navigation */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                background: '#f8f9fa',
+                borderBottom: '1px solid #e8ecf1',
+                flexWrap: 'wrap',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaFile size={14} style={{ color: '#667eea' }} />
+                  <span style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '13px' }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                  <button onClick={goToFirstPage} disabled={currentPage <= 1} style={{ padding: '2px 6px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer', opacity: currentPage <= 1 ? 0.4 : 1, color: '#333', fontSize: '11px' }}><FaChevronLeft size={10} /><FaChevronLeft size={10} style={{ marginLeft: '-4px' }} /></button>
+                  <button onClick={goToPrevPage} disabled={currentPage <= 1} style={{ padding: '2px 8px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer', opacity: currentPage <= 1 ? 0.4 : 1, color: '#333', fontSize: '11px' }}><FaChevronLeft size={10} /> Prev</button>
+                  
+                  <input type="number" min="1" max={totalPages} value={currentPage} onChange={(e) => { const val = parseInt(e.target.value); if (val >= 1 && val <= totalPages) setCurrentPage(val) }} style={{ width: '40px', padding: '2px 4px', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'center', fontSize: '12px', color: '#1a1a2e', backgroundColor: '#f8f9fa' }} />
+                  
+                  <button onClick={goToNextPage} disabled={currentPage >= totalPages} style={{ padding: '2px 8px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer', opacity: currentPage >= totalPages ? 0.4 : 1, color: '#333', fontSize: '11px' }}>Next <FaChevronRight size={10} /></button>
+                  <button onClick={goToLastPage} disabled={currentPage >= totalPages} style={{ padding: '2px 6px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer', opacity: currentPage >= totalPages ? 0.4 : 1, color: '#333', fontSize: '11px' }}><FaChevronRight size={10} /><FaChevronRight size={10} style={{ marginLeft: '-4px' }} /></button>
+                  
+                  <span style={{ color: '#999', fontSize: '11px', marginLeft: '4px' }}>{fontSize}px</span>
+                  <button onClick={() => setFontSize(Math.max(12, fontSize - 2))} style={{ padding: '2px 5px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', color: '#333' }}><FaMinus size={10} /></button>
+                  <button onClick={() => setFontSize(Math.min(28, fontSize + 2))} style={{ padding: '2px 5px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', color: '#333' }}><FaPlus size={10} /></button>
+                </div>
+              </div>
+              
+              {/* Page Content */}
+              <div style={{ 
+                padding: '16px', 
+                maxHeight: '500px', 
+                overflowY: 'auto',
+                background: '#fafafa'
+              }}>
+                <div style={{ 
+                  fontSize: `${fontSize}px`, 
+                  lineHeight: '1.8', 
+                  color: '#1a1a2e',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {pdfPages[currentPage - 1]?.text || 'No text found on this page'}
+                </div>
+              </div>
+              
+              {/* Page Footer */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '8px 16px',
+                background: '#f8f9fa',
+                borderTop: '1px solid #e8ecf1',
+                flexWrap: 'wrap',
+                gap: '6px',
+                alignItems: 'center',
+                fontSize: '11px'
+              }}>
+                <div style={{ display: 'flex', gap: '12px', color: '#5a5a7a' }}>
+                  <span><FaTextHeight size={11} style={{ marginRight: '2px' }} /> {pdfPages[currentPage - 1]?.length || 0} chars</span>
+                  <span><FaList size={11} style={{ marginRight: '2px' }} /> {pdfPages[currentPage - 1]?.wordCount || 0} words</span>
+                  <span><FaClock size={11} style={{ marginRight: '2px' }} /> ~{Math.ceil((pdfPages[currentPage - 1]?.wordCount || 0) / 200)} min</span>
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button onClick={() => { const text = pdfPages[currentPage - 1]?.text || ''; navigator.clipboard?.writeText(text); showToast('success', 'Copied!', 'Page text copied to clipboard.') }} style={{ padding: '2px 8px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', color: '#333', fontSize: '11px' }}><FaCopy size={10} style={{ marginRight: '2px' }} /> Copy</button>
+                  <button onClick={() => { const text = pdfPages[currentPage - 1]?.text || ''; const win = window.open('', '_blank'); if (win) { win.document.write(`<pre style="font-family:system-ui;padding:1rem;font-size:14px;line-height:1.8;color:#1a1a2e;">${text}</pre>`); win.document.title = `Page ${currentPage} - ${fileName}` } }} style={{ padding: '2px 8px', background: 'transparent', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', color: '#333', fontSize: '11px' }}><FaPrint size={10} style={{ marginRight: '2px' }} /> Print</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Gemini Chat */}
+            <div style={{
+              background: '#fff',
+              borderRadius: '12px',
+              border: '1px solid #e8ecf1',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '600px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+            }}>
+              {/* Chat Header */}
+              <div style={{
+                padding: '12px 16px',
+                background: '#f8f9fa',
+                borderBottom: '1px solid #e8ecf1',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <FaGoogle size={20} style={{ color: '#4285F4' }} />
+                <span style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '14px' }}>
+                  Lhazin's AI Assistant
+                </span>
+                {apiKey ? (
+                  <span style={{ fontSize: '10px', color: '#4ECDC4', background: 'rgba(78,205,196,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
+                    <FaCheck size={10} style={{ marginRight: '2px' }} /> Ready
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '10px', color: '#F9CA24', background: 'rgba(249,202,36,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
+                    <FaTimes size={10} style={{ marginRight: '2px' }} /> No API Key
+                  </span>
+                )}
+                <span style={{ fontSize: '10px', color: '#999', marginLeft: 'auto' }}>
+                  <FaDatabase size={10} style={{ marginRight: '2px' }} />
+                  {totalWords.toLocaleString()} words indexed
+                </span>
+              </div>
+
+              {/* Chat Messages */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '12px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                background: '#fafafa'
+              }}>
                 {messages.length === 0 ? (
-                  <div className="chat-empty">
-                    <FaRobot size={48} className="chat-empty-icon" style={{ color: '#667eea' }} />
-                    <h3 style={{ color: '#1a1a2e' }}>Ask questions about your document</h3>
-                    <p style={{ color: '#5a5a7a' }}>Get answers based on the actual content</p>
-                    <div className="suggested-questions">
-                      <button className="suggested-btn" onClick={() => { setQuestion('What is this document about?'); setTimeout(() => handleAskQuestion(), 100) }}>
-                        <FaLightbulb size={14} style={{ marginRight: '6px' }} /> What is this about?
-                      </button>
-                      <button className="suggested-btn" onClick={() => { setQuestion('Summarize the main points'); setTimeout(() => handleAskQuestion(), 100) }}>
-                        <FaList size={14} style={{ marginRight: '6px' }} /> Summarize
-                      </button>
-                      <button className="suggested-btn" onClick={() => { setQuestion('What are the key topics?'); setTimeout(() => handleAskQuestion(), 100) }}>
-                        <FaBrain size={14} style={{ marginRight: '6px' }} /> Key topics
-                      </button>
-                      <button className="suggested-btn" onClick={() => { setQuestion('Find important information'); setTimeout(() => handleAskQuestion(), 100) }}>
-                        <FaSearch size={14} style={{ marginRight: '6px' }} /> Find info
-                      </button>
-                    </div>
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '40px 20px',
+                    color: '#999'
+                  }}>
+                    <FaRobot size={48} style={{ color: '#667eea', opacity: 0.5 }} />
+                    <p style={{ marginTop: '12px', fontSize: '14px', color: '#5a5a7a' }}>
+                      {apiKey ? 'Ask a question about the PDF!' : 'Add your Gemini API key to get started.'}
+                    </p>
+                    <p style={{ fontSize: '12px', color: '#bbb' }}>
+                      {apiKey ? 'e.g., "What does clause 10.3.2.4 say?"' : 'Click "Add API Key" above.'}
+                    </p>
                   </div>
                 ) : (
                   messages.map((msg, index) => (
-                    <motion.div key={index} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`chat-message ${msg.type}`}>
-                      <div className="message-avatar">{msg.type === 'user' ? '👤' : '🤖'}</div>
-                      <div className="message-content">
-                        <div className="message-text" style={{ whiteSpace: 'pre-wrap', color: msg.type === 'user' ? '#fff' : '#333' }}>{msg.content}</div>
-                        <div className="message-time" style={{ color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }}>{msg.timestamp}</div>
+                    <div key={index} style={{
+                      alignSelf: msg.type === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '85%',
+                      background: msg.type === 'user' ? '#667eea' : '#fff',
+                      color: msg.type === 'user' ? '#fff' : '#1a1a2e',
+                      padding: '10px 14px',
+                      borderRadius: msg.type === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                      boxShadow: msg.type === 'user' ? '0 2px 8px rgba(102,126,234,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
+                      border: msg.type === 'user' ? 'none' : '1px solid #e8ecf1',
+                      fontSize: '13px',
+                      lineHeight: '1.6',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px', color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }}>
+                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> AI Chatbot</>} · {msg.timestamp}
                       </div>
-                    </motion.div>
+                      {msg.content}
+                    </div>
                   ))
                 )}
-                {isLoading && (
-                  <div className="chat-message ai">
-                    <div className="message-avatar">🤖</div>
-                    <div className="message-content">
-                      <div className="typing-indicator"><span></span><span></span><span></span></div>
-                    </div>
+                {isGeminiLoading && (
+                  <div style={{
+                    alignSelf: 'flex-start',
+                    maxWidth: '85%',
+                    background: '#fff',
+                    padding: '10px 14px',
+                    borderRadius: '12px 12px 12px 4px',
+                    border: '1px solid #e8ecf1',
+                    fontSize: '13px',
+                    color: '#667eea'
+                  }}>
+                    <FaSpinner className="spinning" size={14} style={{ marginRight: '6px' }} /> Thinking...
                   </div>
                 )}
-                <div ref={messagesEndRef} />
-              </div>
-              <div className="chat-input-container">
-                <textarea className="chat-input" placeholder="Ask a question..." value={question} onChange={(e) => setQuestion(e.target.value)} onKeyPress={handleKeyPress} rows={2} />
-                <button className="send-btn" onClick={handleAskQuestion} disabled={!question.trim() || isLoading}>
-                  <FaPaperPlane size={18} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Visualizations Tab */}
-        {activeTab === 'visuals' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="visuals-content"
-          >
-            <div className="visuals-grid">
-              <div className="visual-card">
-                <h3 style={{ color: '#1a1a2e' }}><FaChartBar size={16} style={{ marginRight: '0.5rem', color: '#667eea' }} /> Page Distribution</h3>
-                <div className="chart-placeholder">
-                  <div className="chart-bar-container">
-                    {pdfPages.slice(0, 15).map((page, i) => (
-                      <div key={i} className="chart-bar-wrapper">
-                        <div className="chart-bar" style={{ height: `${Math.min((page.length / 500) * 100, 100)}%`, background: `hsl(${i * 24 + 200}, 70%, 55%)` }}></div>
-                        <span className="chart-label" style={{ color: '#5a5a7a' }}>{page.pageNumber}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="chart-description" style={{ color: '#5a5a7a' }}>Page content length distribution</p>
-                </div>
-              </div>
-              <div className="visual-card">
-                <h3 style={{ color: '#1a1a2e' }}><FaDatabase size={16} style={{ marginRight: '0.5rem', color: '#667eea' }} /> Document Stats</h3>
-                <div className="stats-visual">
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Total Pages</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>{reportData?.stats.pages || 0}</span></div>
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Total Words</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>{reportData?.stats.words.toLocaleString() || 0}</span></div>
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Characters</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>{reportData?.stats.characters.toLocaleString() || 0}</span></div>
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Sentences</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>{reportData?.stats.sentences || 0}</span></div>
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Paragraphs</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>{reportData?.stats.paragraphs || 0}</span></div>
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Unique Words</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>{reportData?.stats.uniqueWords || 0}</span></div>
-                  <div className="stat-row"><span style={{ color: '#5a5a7a' }}>Reading Time</span><span className="stat-value-visual" style={{ color: '#1a1a2e' }}>~{reportData?.stats.readingTime || 0} min</span></div>
-                </div>
-              </div>
-              <div className="visual-card">
-                <h3 style={{ color: '#1a1a2e' }}><FaRobot size={16} style={{ marginRight: '0.5rem', color: '#667eea' }} /> Key Terms</h3>
-                <div className="word-cloud-placeholder">
-                  {reportData?.entities?.slice(0, 20).map((word, i) => (
-                    <span key={i} className="word-cloud-tag" style={{ fontSize: `${12 + (i % 5) * 4}px`, opacity: 0.6 + (i % 3) * 0.15, color: `hsl(${(i * 37) % 360}, 70%, 50%)` }}>
-                      {word}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Pages Tab */}
-        {activeTab === 'pages' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="pages-content"
-          >
-            {/* Search */}
-            <div className="search-container">
-              <div className="search-bar">
-                <FaSearch size={18} className="search-icon" style={{ color: '#999' }} />
-                <input 
-                  type="text" 
-                  placeholder="Search within document..." 
-                  className="search-input"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value)
-                    handleSearch()
-                  }}
-                  style={{ color: '#1a1a2e' }}
-                />
-                <button className="search-btn" onClick={handleSearch}>
-                  <FaSearch size={16} />
-                  Search
-                </button>
-              </div>
-            </div>
-
-            {/* Search Results */}
-            {searchResults.length > 0 && (
-              <div className="search-results">
-                <h4 style={{ color: '#1a1a2e' }}>Found {searchResults.length} results</h4>
-                {searchResults.map((result, index) => (
-                  <div key={index} className="search-result-item">
-                    <span className="result-page" style={{ color: '#667eea' }}>Page {result.page}</span>
-                    <p className="result-text" style={{ color: '#333' }}>{result.text}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Professional Page Navigation */}
-            <div className="page-navigation">
-              <div className="nav-left">
-                <button 
-                  className="nav-btn" 
-                  onClick={goToFirstPage} 
-                  disabled={currentPage <= 1}
-                  title="First Page"
-                >
-                  <FaChevronLeft size={14} />
-                  <FaChevronLeft size={14} style={{ marginLeft: '-8px' }} />
-                </button>
-                <button 
-                  className="nav-btn" 
-                  onClick={goToPrevPage} 
-                  disabled={currentPage <= 1}
-                  title="Previous Page (←)"
-                >
-                  <FaChevronLeft size={16} />
-                  <span>Previous</span>
-                </button>
               </div>
 
-              <div className="nav-center">
-                <span className="page-info" style={{ color: '#1a1a2e' }}>
-                  Page <strong>{currentPage}</strong> of <strong>{totalPages || 1}</strong>
-                </span>
-                <div className="page-jump">
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max={totalPages || 1}
-                    value={currentPage}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value)
-                      if (val >= 1 && val <= totalPages) {
-                        setCurrentPage(val)
-                      }
-                    }}
-                    className="page-input"
-                    style={{ color: '#1a1a2e' }}
-                  />
-                </div>
-              </div>
-
-              <div className="nav-right">
-                <button 
-                  className="nav-btn" 
-                  onClick={goToNextPage} 
-                  disabled={currentPage >= totalPages}
-                  title="Next Page (→)"
-                >
-                  <span>Next</span>
-                  <FaChevronRight size={16} />
-                </button>
-                <button 
-                  className="nav-btn" 
-                  onClick={goToLastPage} 
-                  disabled={currentPage >= totalPages}
-                  title="Last Page"
-                >
-                  <FaChevronRight size={14} />
-                  <FaChevronRight size={14} style={{ marginLeft: '-8px' }} />
-                </button>
-              </div>
-            </div>
-
-            {/* Page Content - Professional Viewer */}
-            {pdfPages.length > 0 && (
-              <div className="page-viewer">
-                <div className="page-header">
-                  <div className="page-header-left">
-                    <FaFile size={16} style={{ color: '#667eea' }} />
-                    <span style={{ color: '#1a1a2e', fontWeight: 600 }}>
-                      Page {currentPage} of {totalPages}
-                    </span>
-                  </div>
-                  <div className="page-header-right">
-                    <button 
-                      className="zoom-btn" 
-                      onClick={() => setFontSize(Math.max(12, fontSize - 2))}
-                      title="Zoom Out"
-                    >
-                      <FaMinus size={14} />
-                    </button>
-                    <span style={{ color: '#5a5a7a', fontSize: '0.85rem' }}>{fontSize}px</span>
-                    <button 
-                      className="zoom-btn" 
-                      onClick={() => setFontSize(Math.min(28, fontSize + 2))}
-                      title="Zoom In"
-                    >
-                      <FaPlus size={14} />
-                    </button>
-                    <button className="zoom-btn" onClick={() => setFontSize(16)} title="Reset Zoom">
-                      <FaTextHeight size={14} />
-                    </button>
-                    <button className="zoom-btn" onClick={() => {
-                      const text = pdfPages[currentPage - 1]?.text || ''
-                      if (text) {
-                        const blob = new Blob([text], { type: 'text/plain' })
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = `page_${currentPage}.txt`
-                        a.click()
-                        URL.revokeObjectURL(url)
-                      }
-                    }} title="Export Page">
-                      <FaDownload size={14} />
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="page-content-display">
-                  <div className="page-text" style={{ 
-                    fontSize: `${fontSize}px`,
-                    lineHeight: '1.8',
+              {/* Chat Input */}
+              <div style={{
+                padding: '10px 12px',
+                borderTop: '1px solid #e8ecf1',
+                background: '#fff',
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'flex-end'
+              }}>
+                <textarea
+                  rows="2"
+                  placeholder={apiKey ? "Ask about the PDF..." : "Add API key first..."}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={!apiKey || isGeminiLoading}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    minHeight: '40px',
+                    maxHeight: '80px',
+                    background: !apiKey ? '#f5f5f5' : '#fff',
                     color: '#1a1a2e'
-                  }}>
-                    {pdfPages[currentPage - 1]?.text || 'No text found on this page'}
-                  </div>
-                </div>
-
-                <div className="page-footer">
-                  <div className="page-stats">
-                    <span style={{ color: '#5a5a7a' }}>
-                      <FaTextHeight size={14} style={{ marginRight: '4px' }} />
-                      {pdfPages[currentPage - 1]?.length || 0} characters
-                    </span>
-                    <span style={{ color: '#5a5a7a' }}>
-                      <FaList size={14} style={{ marginRight: '4px' }} />
-                      {pdfPages[currentPage - 1]?.wordCount || 0} words
-                    </span>
-                    <span style={{ color: '#5a5a7a' }}>
-                      <FaClock size={14} style={{ marginRight: '4px' }} />
-                      ~{Math.ceil((pdfPages[currentPage - 1]?.wordCount || 0) / 200)} min read
-                    </span>
-                  </div>
-                  <div className="page-actions">
-                    <button className="page-action-btn" onClick={() => {
-                      const text = pdfPages[currentPage - 1]?.text || ''
-                      navigator.clipboard?.writeText(text)
-                      showAlert('success', '✅ Copied!', 'Page text copied to clipboard.')
-                    }}>
-                      <FaCopy size={14} />
-                      Copy
-                    </button>
-                    <button className="page-action-btn" onClick={() => {
-                      const text = pdfPages[currentPage - 1]?.text || ''
-                      const win = window.open('', '_blank')
-                      if (win) {
-                        win.document.write(`<pre style="font-family:system-ui;padding:2rem;font-size:16px;line-height:1.8;">${text}</pre>`)
-                        win.document.title = `Page ${currentPage} - ${fileData.fileName}`
-                      }
-                    }}>
-                      <FaPrint size={14} />
-                      Print
-                    </button>
-                  </div>
-                </div>
+                  }}
+                />
+                <button
+                  onClick={handleAskQuestion}
+                  disabled={!apiKey || !question.trim() || isGeminiLoading}
+                  style={{
+                    padding: '8px 14px',
+                    background: (apiKey && question.trim() && !isGeminiLoading) ? '#667eea' : '#ccc',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: (apiKey && question.trim() && !isGeminiLoading) ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    height: '40px'
+                  }}
+                >
+                  <FaPaperPlane size={14} />
+                  Ask
+                </button>
               </div>
-            )}
-          </motion.div>
+            </div>
+
+          </div>
         )}
+
+        {/* No PDF State */}
+        {!isLoading && pdfPages.length === 0 && (
+          <div style={{
+            textAlign: 'center',
+            padding: '60px 20px',
+            background: '#fff',
+            borderRadius: '12px',
+            border: '1px solid #e8ecf1'
+          }}>
+            <FaFilePdf size={60} style={{ color: '#ddd' }} />
+            <h3 style={{ color: '#333', marginTop: '16px' }}>No PDF Loaded</h3>
+            <p style={{ color: '#5a5a7a' }}>Please go back and upload a PDF file.</p>
+            <button 
+              onClick={() => navigate('/')}
+              style={{
+                marginTop: '16px',
+                padding: '10px 24px',
+                background: '#667eea',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                margin: '0 auto'
+              }}
+            >
+              <FaUpload size={16} />
+              Upload PDF
+            </button>
+          </div>
+        )}
+
+        {/* Quick Stats Footer */}
+        {!isLoading && pdfPages.length > 0 && (
+          <div style={{
+            marginTop: '20px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: '12px',
+            background: '#fff',
+            padding: '14px 20px',
+            borderRadius: '12px',
+            border: '1px solid #e8ecf1'
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaBook size={11} style={{ marginRight: '4px' }} />Pages</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a2e' }}>{totalPages}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaDatabase size={11} style={{ marginRight: '4px' }} />Words</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a2e' }}>{totalWords.toLocaleString()}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaClock size={11} style={{ marginRight: '4px' }} />Read Time</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a2e' }}>~{readingTime} min</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaFile size={11} style={{ marginRight: '4px' }} />File Size</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1a1a2e' }}>{formatFileSize(fileData.fileSize)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaGoogle size={11} style={{ marginRight: '4px' }} />API Status</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: apiKey ? '#4ECDC4' : '#F9CA24' }}>
+                {apiKey ? <FaCheck size={14} style={{ marginRight: '4px' }} /> : <FaTimes size={14} style={{ marginRight: '4px' }} />}
+                {apiKey ? 'Active' : 'No Key'}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
