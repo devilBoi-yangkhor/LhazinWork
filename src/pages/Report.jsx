@@ -796,7 +796,7 @@ ANSWER:`
               }}>
                 <FaGoogle size={20} style={{ color: '#4285F4' }} />
                 <span style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '14px' }}>
-                  Lhazin's AI Assistant
+                  AI Assistant Knowledge Retrival
                 </span>
                 <span style={{ fontSize: '10px', color: '#4ECDC4', background: 'rgba(78,205,196,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
                   <FaCheck size={10} style={{ marginRight: '2px' }} /> Ready
@@ -847,7 +847,7 @@ ANSWER:`
                       whiteSpace: 'pre-wrap'
                     }}>
                       <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px', color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }}>
-                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> Lhazin's Chatbot</>} · {msg.timestamp}
+                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> AI Assistant Knowledge Retrival Chatbot</>} · {msg.timestamp}
                       </div>
                       {msg.content}
                     </div>
