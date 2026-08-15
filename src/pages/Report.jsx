@@ -847,7 +847,7 @@ ANSWER:`
                       whiteSpace: 'pre-wrap'
                     }}>
                       <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px', color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }}>
-                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> AI Chatbot</>} · {msg.timestamp}
+                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> Lhazin's Chatbot</>} · {msg.timestamp}
                       </div>
                       {msg.content}
                     </div>
