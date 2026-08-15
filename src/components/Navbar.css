@@ -15,8 +15,9 @@
 }
 
 .nav-logo {
-  font-size: 1.5rem;
-  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   text-decoration: none;
   color: #1a1a2e;
   transition: color 0.3s;
@@ -24,6 +25,17 @@
 
 .nav-logo:hover {
   color: #667eea;
+}
+
+.nav-logo-image {
+  height: 60px;
+  width: auto;
+  display: block;
+}
+
+.nav-logo-text {
+  font-size: 1.5rem;
+  font-weight: bold;
 }
 
 .nav-menu {
@@ -58,5 +70,17 @@
     gap: 1rem;
     flex-wrap: wrap;
     justify-content: center;
+  }
+  
+  .nav-logo-image {
+    height: 40px;
+  }
+  
+  .nav-logo-text {
+    font-size: 1rem;
+  }
+  
+  .nav-logo {
+    gap: 8px;
   }
 }

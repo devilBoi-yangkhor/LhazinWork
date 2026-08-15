@@ -14,6 +14,50 @@
   overflow-x: hidden;
   padding: 0 !important;
   margin: 0 !important;
+  position: relative;
+}
+
+/* Watermark Styles - Ultra Subtle */
+.watermark-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.15; /* Extremely subtle - barely visible */
+}
+
+.watermark-image {
+  max-width: 70%;
+  max-height: 70%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: grayscale(100%) blur(1px);
+  user-select: none;
+  -webkit-user-drag: none;
+  opacity: 0.8;
+}
+
+/* Make sure ALL content is above watermark */
+.hero-section,
+.notebooks-section,
+.features-section,
+.cta-section,
+.hero-content,
+.upload-container,
+.tech-stack,
+.notebooks-grid,
+.features-grid,
+.cta-container {
+  position: relative;
+  z-index: 1;
 }
 
 /* Hero Section - FULL WIDTH */
@@ -30,6 +74,7 @@
   overflow: hidden;
   margin: 0 !important;
   border: none !important;
+  z-index: 1;
 }
 
 .hero-content {
@@ -208,6 +253,8 @@
   backdrop-filter: blur(10px);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  z-index: 2;
 }
 
 .tech-label {
@@ -291,6 +338,8 @@
   width: 100%;
   padding: 4rem 2rem;
   background: #f8f9fa;
+  position: relative;
+  z-index: 1;
 }
 
 .notebooks-header {
@@ -396,6 +445,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.5rem;
+  position: relative;
+  z-index: 2;
 }
 
 .notebook-card {
@@ -453,6 +504,8 @@
   width: 100%;
   padding: 5rem 2rem;
   background: white;
+  position: relative;
+  z-index: 1;
 }
 
 .section-header {
@@ -492,6 +545,8 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2rem;
+  position: relative;
+  z-index: 2;
 }
 
 .feature-card {
@@ -547,6 +602,7 @@
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   position: relative;
   overflow: hidden;
+  z-index: 1;
 }
 
 .cta-container {
@@ -556,6 +612,8 @@
   grid-template-columns: 1fr 1fr;
   gap: 4rem;
   align-items: center;
+  position: relative;
+  z-index: 2;
 }
 
 .cta-content {
@@ -698,6 +756,11 @@
   .notebooks-actions {
     justify-content: space-between;
   }
+
+  .watermark-image {
+    max-width: 60%;
+    max-height: 60%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -798,6 +861,15 @@
     width: 100%;
     justify-content: center;
   }
+
+  .watermark-container {
+    opacity: 0.01;
+  }
+  
+  .watermark-image {
+    max-width: 50%;
+    max-height: 50%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -821,6 +893,15 @@
     font-size: 0.75rem;
     padding: 0.3rem 0.8rem;
   }
+
+  .watermark-container {
+    opacity: 0.008;
+  }
+  
+  .watermark-image {
+    max-width: 40%;
+    max-height: 40%;
+  }
 }
 
 /* Upload Container - Professional File Upload */
@@ -828,6 +909,8 @@
   width: 100%;
   max-width: 700px;
   margin: 1.5rem auto;
+  position: relative;
+  z-index: 2;
 }
 
 .upload-area {

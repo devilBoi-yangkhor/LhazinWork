@@ -63,8 +63,8 @@ function Report() {
   const [question, setQuestion] = useState('')
   const [messages, setMessages] = useState([])
   const [isGeminiLoading, setIsGeminiLoading] = useState(false)
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_GEMINI_API_KEY || '')
-  const [showApiKeyInput, setShowApiKeyInput] = useState(!apiKey)
+  const [apiKey, setApiKey] = useState('')
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false) // Changed to false by default
   const [tempApiKey, setTempApiKey] = useState('')
   const [apiError, setApiError] = useState('')
 
@@ -178,7 +178,7 @@ function Report() {
       console.log('PDF loaded:', pages.length, 'pages')
       console.log('Total text length:', allText.length)
       
-      // Add welcome message
+      // Add welcome message if API key is available
       if (apiKey) {
         setMessages([{
           type: 'ai',
@@ -492,12 +492,28 @@ ANSWER:`
     }
   }
 
-  // Load saved API key on mount
+  // Load API key from .env or localStorage
   useEffect(() => {
+    // First try to get from .env
+    const envKey = import.meta.env.VITE_GEMINI_API_KEY
+    
+    // Then try localStorage
     const savedKey = localStorage.getItem('gemini_api_key')
-    if (savedKey) {
-      setApiKey(savedKey)
+    
+    // Priority: .env key > localStorage > empty
+    if (envKey && envKey.trim() !== '') {
+      setApiKey(envKey.trim())
+      // Also save to localStorage for future use
+      localStorage.setItem('gemini_api_key', envKey.trim())
       setShowApiKeyInput(false)
+      console.log('✅ API key loaded from .env file')
+    } else if (savedKey && savedKey.trim() !== '') {
+      setApiKey(savedKey.trim())
+      setShowApiKeyInput(false)
+      console.log('✅ API key loaded from localStorage')
+    } else {
+      setShowApiKeyInput(true)
+      console.log('⚠️ No API key found. Please add VITE_GEMINI_API_KEY to your .env file.')
     }
   }, [])
 
@@ -728,7 +744,7 @@ ANSWER:`
       {/* Main Content */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         
-        {/* API Key Input Modal */}
+        {/* API Key Input Modal - Only shown if no key is available */}
         {showApiKeyInput && (
           <div style={{
             background: '#fff',

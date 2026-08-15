@@ -5,12 +5,6 @@ import {
   FaChartBar, 
   FaBrain, 
   FaRocket, 
-  FaBolt, 
-  FaShieldAlt,
-  FaArrowRight,
-  FaCheckCircle,
-  FaChartLine,
-  FaUsers,
   FaStar,
   FaRobot,
   FaMagic,
@@ -19,18 +13,16 @@ import {
   FaInfinity,
   FaNodeJs,
   FaPython,
-  FaSearch,
   FaPlus,
   FaClock,
-  FaFilter,
   FaBook,
   FaGraduationCap,
   FaGlobe,
   FaLightbulb,
   FaUpload,
-  FaFile,
   FaTimes,
-  FaSpinner
+  FaCheckCircle,
+  FaArrowRight
 } from 'react-icons/fa'
 import { 
   SiReact, 
@@ -38,6 +30,13 @@ import {
 } from 'react-icons/si'
 import { useNavigate } from 'react-router-dom'
 import './Home.css'
+
+// CORRECT IMPORT - adjust path based on where your image is
+import watermarkLogo from '../assets/logo.png' // If in src/assets/
+// OR
+// import watermarkLogo from './logo.png' // If in src/pages/
+// OR
+// const watermarkLogo = '/logo.png' // If in public folder
 
 function Home() {
   const navigate = useNavigate()
@@ -120,21 +119,22 @@ function Home() {
   // Filter tabs
   const filters = ["All", "Featured notebooks", "Collections"]
 
-  // Handle file selection
   const handleFileSelect = (event) => {
     const file = event.target.files[0]
     if (file && file.type === 'application/pdf') {
       setSelectedFile(file)
     } else {
       alert('Please upload a valid PDF file')
-      // Reset the input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
     }
   }
 
-  // Handle drag and drop
+  useEffect(() => {
+    document.title = 'AI Assistant - Upload & Analyze PDFs'
+  }, [])
+
   const handleDragOver = (event) => {
     event.preventDefault()
     event.currentTarget.style.borderColor = '#667eea'
@@ -160,7 +160,6 @@ function Home() {
     }
   }
 
-  // Handle file upload and navigation
   const handleGenerateReport = () => {
     if (!selectedFile) {
       alert('Please select a PDF file first!')
@@ -170,13 +169,11 @@ function Home() {
     setIsUploading(true)
     setUploadProgress(0)
 
-    // Simulate upload progress
     const interval = setInterval(() => {
       setUploadProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval)
           setIsUploading(false)
-          // Navigate to report page with file data
           navigate('/report', { 
             state: { 
               fileName: selectedFile.name,
@@ -192,7 +189,6 @@ function Home() {
     }, 300)
   }
 
-  // Remove selected file
   const removeFile = () => {
     setSelectedFile(null)
     setUploadProgress(0)
@@ -201,7 +197,6 @@ function Home() {
     }
   }
 
-  // Format file size
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B'
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -210,6 +205,15 @@ function Home() {
 
   return (
     <div className="home-container">
+      {/* Watermark Background */}
+      <div className="watermark-container">
+        <img 
+          src={watermarkLogo} 
+          alt="Watermark" 
+          className="watermark-image"
+        />
+      </div>
+
       {/* Hero Section - Full Width */}
       <section className="hero-section">
         <div className="hero-content">
@@ -220,7 +224,7 @@ function Home() {
             className="hero-badge"
           >
             <FaStar size={16} className="badge-icon" />
-            <span>AI-Powered Document Intelligence</span>
+            <span>AI Assistant Knowledge Retrival</span>
           </motion.div>
 
           <motion.h1
@@ -263,7 +267,7 @@ function Home() {
             />
           </motion.div>
 
-          {/* File Upload Area - Professional Style */}
+          {/* File Upload Area */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -353,59 +357,6 @@ function Home() {
         </div>
       </section>
 
-      {/* Notebooks Section - Like Gemini Notebook */}
-      <section className="notebooks-section">
-        <div className="notebooks-header">
-          <div className="notebooks-title-section">
-            <h2 className="notebooks-title">📓 Featured Notebooks</h2>
-            <div className="notebooks-filters">
-              {filters.map((filter, index) => (
-                <button key={index} className={`filter-btn ${index === 0 ? 'active' : ''}`}>
-                  {filter}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="notebooks-actions">
-            <button className="sort-btn">
-              <FaClock size={14} />
-              Most recent ▼
-            </button>
-            <button className="create-btn">
-              <FaPlus size={14} />
-              Create new
-            </button>
-          </div>
-        </div>
-
-        <div className="notebooks-grid">
-          {featuredNotebooks.map((notebook, index) => (
-            <motion.div
-              key={index}
-              className="notebook-card"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              viewport={{ once: true }}
-              whileHover={{ 
-                y: -5,
-                boxShadow: "0 8px 30px rgba(0,0,0,0.12)"
-              }}
-            >
-              <div className="notebook-icon" style={{ color: notebook.color }}>
-                {notebook.icon}
-              </div>
-              <h3 className="notebook-title">{notebook.title}</h3>
-              <p className="notebook-description">{notebook.description}</p>
-              <div className="notebook-meta">
-                <span className="notebook-date">{notebook.date}</span>
-                <span className="notebook-sources">· {notebook.sources}</span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
       {/* Features Section */}
       <section className="features-section">
         <motion.div
@@ -473,16 +424,7 @@ function Home() {
               Join thousands of users who are already using DocAI to analyze,
               understand, and extract insights from their PDFs.
             </p>
-            <div className="cta-buttons">
-              <button className="btn-primary cta-btn">
-                <FaRocket size={20} />
-                Start Your Free Trial
-              </button>
-              <button className="btn-secondary cta-btn-secondary">
-                <FaDatabase size={20} />
-                View API Docs
-              </button>
-            </div>
+            
             <div className="cta-features">
               <span><FaCheckCircle size={16} /> No credit card</span>
               <span><FaCrown size={16} /> Free forever plan</span>
