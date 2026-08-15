@@ -41,6 +41,9 @@ import './Report.css'
 // Set worker source
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`
 
+// HARDCODE YOUR API KEY HERE
+const GEMINI_API_KEY = 'AQ.Ab8RN6LioLiG5LDKB-SZ4ZlWp0BkqcSepMOkl0NiiBi7tEpPZQ'
+
 function Report() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -63,9 +66,6 @@ function Report() {
   const [question, setQuestion] = useState('')
   const [messages, setMessages] = useState([])
   const [isGeminiLoading, setIsGeminiLoading] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false) // Changed to false by default
-  const [tempApiKey, setTempApiKey] = useState('')
   const [apiError, setApiError] = useState('')
 
   // ============================================
@@ -178,14 +178,12 @@ function Report() {
       console.log('PDF loaded:', pages.length, 'pages')
       console.log('Total text length:', allText.length)
       
-      // Add welcome message if API key is available
-      if (apiKey) {
-        setMessages([{
-          type: 'ai',
-          content: `PDF loaded! I've read **${pages.length} pages** (${allText.split(/\s+/).filter(w => w.length > 0).length.toLocaleString()} words). Ask me anything about this document!`,
-          timestamp: new Date().toLocaleTimeString()
-        }])
-      }
+      // Add welcome message with API key available
+      setMessages([{
+        type: 'ai',
+        content: `PDF loaded! I've read **${pages.length} pages** (${allText.split(/\s+/).filter(w => w.length > 0).length.toLocaleString()} words). Ask me anything about this document!`,
+        timestamp: new Date().toLocaleTimeString()
+      }])
       
       showToast('success', 'PDF Loaded', `${pages.length} pages extracted successfully!`)
       
@@ -290,7 +288,7 @@ ANSWER:`
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: {
@@ -367,7 +365,7 @@ INSTRUCTIONS:
 ANSWER:`
 
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
           {
             method: 'POST',
             headers: {
@@ -409,19 +407,6 @@ ANSWER:`
   const handleAskQuestion = async () => {
     if (!question.trim()) {
       showAlert('warning', 'Empty Question', 'Please enter a question before asking.')
-      return
-    }
-    
-    if (!apiKey) {
-      const result = await showConfirm(
-        'API Key Required',
-        'Please enter your Gemini API key first.',
-        'Add API Key',
-        'Cancel'
-      )
-      if (result.isConfirmed) {
-        setShowApiKeyInput(true)
-      }
       return
     }
     
@@ -478,44 +463,6 @@ ANSWER:`
       handleAskQuestion()
     }
   }
-
-  // Save API key
-  const saveApiKey = () => {
-    if (tempApiKey.trim()) {
-      setApiKey(tempApiKey.trim())
-      setShowApiKeyInput(false)
-      localStorage.setItem('gemini_api_key', tempApiKey.trim())
-      showToast('success', 'API Key Saved', 'Gemini API key saved successfully!')
-      setTempApiKey('')
-    } else {
-      showAlert('warning', 'Invalid Key', 'Please enter a valid API key.')
-    }
-  }
-
-  // Load API key from .env or localStorage
-  useEffect(() => {
-    // First try to get from .env
-    const envKey = import.meta.env.VITE_GEMINI_API_KEY
-    
-    // Then try localStorage
-    const savedKey = localStorage.getItem('gemini_api_key')
-    
-    // Priority: .env key > localStorage > empty
-    if (envKey && envKey.trim() !== '') {
-      setApiKey(envKey.trim())
-      // Also save to localStorage for future use
-      localStorage.setItem('gemini_api_key', envKey.trim())
-      setShowApiKeyInput(false)
-      console.log('✅ API key loaded from .env file')
-    } else if (savedKey && savedKey.trim() !== '') {
-      setApiKey(savedKey.trim())
-      setShowApiKeyInput(false)
-      console.log('✅ API key loaded from localStorage')
-    } else {
-      setShowApiKeyInput(true)
-      console.log('⚠️ No API key found. Please add VITE_GEMINI_API_KEY to your .env file.')
-    }
-  }, [])
 
   // Format file size
   const formatFileSize = (bytes) => {
@@ -650,38 +597,18 @@ ANSWER:`
           </div>
           
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {apiKey ? (
-              <span style={{ 
-                fontSize: '12px', 
-                color: '#4ECDC4',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '4px 10px',
-                background: 'rgba(78, 205, 196, 0.1)',
-                borderRadius: '12px'
-              }}>
-                <FaGoogle size={12} /> Chatbot Ready
-              </span>
-            ) : (
-              <button 
-                onClick={() => setShowApiKeyInput(true)}
-                style={{
-                  padding: '4px 12px',
-                  background: '#F9CA24',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  color: '#333',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <FaKey size={12} /> Add API Key
-              </button>
-            )}
+            <span style={{ 
+              fontSize: '12px', 
+              color: '#4ECDC4',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
+              background: 'rgba(78, 205, 196, 0.1)',
+              borderRadius: '12px'
+            }}>
+              <FaGoogle size={12} /> Chatbot Ready
+            </span>
             
             <button 
               onClick={handleSave}
@@ -744,83 +671,6 @@ ANSWER:`
       {/* Main Content */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         
-        {/* API Key Input Modal - Only shown if no key is available */}
-        {showApiKeyInput && (
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '20px 24px',
-            marginBottom: '20px',
-            border: '2px solid #F9CA24',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <FaGoogle size={24} style={{ color: '#4285F4' }} />
-              <div style={{ flex: 1, minWidth: '200px' }}>
-                <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a2e' }}>
-                  Enter Gemini API Key
-                </div>
-                <div style={{ fontSize: '12px', color: '#5a5a7a' }}>
-                  Get your free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#667eea' }}>aistudio.google.com/apikey</a>
-                </div>
-                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
-                  <FaInfoCircle size={11} style={{ marginRight: '4px' }} />
-                  Using model: gemini-3-flash-preview (with fallback to other models)
-                </div>
-              </div>
-              <input 
-                type="password"
-                placeholder="Paste your API key here..."
-                value={tempApiKey}
-                onChange={(e) => setTempApiKey(e.target.value)}
-                style={{
-                  flex: 1,
-                  minWidth: '200px',
-                  padding: '8px 12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  outline: 'none',
-                  color: '#1a1a2e',
-                  backgroundColor: '#fff'
-                }}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') saveApiKey()
-                }}
-              />
-              <button 
-                onClick={saveApiKey}
-                style={{
-                  padding: '8px 20px',
-                  background: '#4285F4',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}
-              >
-                Save Key
-              </button>
-              <button 
-                onClick={() => setShowApiKeyInput(false)}
-                style={{
-                  padding: '8px 14px',
-                  background: 'transparent',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  color: '#333'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Loading State */}
         {isLoading && (
           <div style={{
@@ -948,15 +798,9 @@ ANSWER:`
                 <span style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '14px' }}>
                   Lhazin's AI Assistant
                 </span>
-                {apiKey ? (
-                  <span style={{ fontSize: '10px', color: '#4ECDC4', background: 'rgba(78,205,196,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
-                    <FaCheck size={10} style={{ marginRight: '2px' }} /> Ready
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '10px', color: '#F9CA24', background: 'rgba(249,202,36,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
-                    <FaTimes size={10} style={{ marginRight: '2px' }} /> No API Key
-                  </span>
-                )}
+                <span style={{ fontSize: '10px', color: '#4ECDC4', background: 'rgba(78,205,196,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
+                  <FaCheck size={10} style={{ marginRight: '2px' }} /> Ready
+                </span>
                 <span style={{ fontSize: '10px', color: '#999', marginLeft: 'auto' }}>
                   <FaDatabase size={10} style={{ marginRight: '2px' }} />
                   {totalWords.toLocaleString()} words indexed
@@ -981,10 +825,10 @@ ANSWER:`
                   }}>
                     <FaRobot size={48} style={{ color: '#667eea', opacity: 0.5 }} />
                     <p style={{ marginTop: '12px', fontSize: '14px', color: '#5a5a7a' }}>
-                      {apiKey ? 'Ask a question about the PDF!' : 'Add your Gemini API key to get started.'}
+                      Ask a question about the PDF!
                     </p>
                     <p style={{ fontSize: '12px', color: '#bbb' }}>
-                      {apiKey ? 'e.g., "What does clause 10.3.2.4 say?"' : 'Click "Add API Key" above.'}
+                      e.g., "What does clause 10.3.2.4 say?"
                     </p>
                   </div>
                 ) : (
@@ -1036,11 +880,11 @@ ANSWER:`
               }}>
                 <textarea
                   rows="2"
-                  placeholder={apiKey ? "Ask about the PDF..." : "Add API key first..."}
+                  placeholder="Ask about the PDF..."
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  disabled={!apiKey || isGeminiLoading}
+                  disabled={isGeminiLoading}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -1052,20 +896,20 @@ ANSWER:`
                     outline: 'none',
                     minHeight: '40px',
                     maxHeight: '80px',
-                    background: !apiKey ? '#f5f5f5' : '#fff',
+                    background: '#fff',
                     color: '#1a1a2e'
                   }}
                 />
                 <button
                   onClick={handleAskQuestion}
-                  disabled={!apiKey || !question.trim() || isGeminiLoading}
+                  disabled={!question.trim() || isGeminiLoading}
                   style={{
                     padding: '8px 14px',
-                    background: (apiKey && question.trim() && !isGeminiLoading) ? '#667eea' : '#ccc',
+                    background: (question.trim() && !isGeminiLoading) ? '#667eea' : '#ccc',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '8px',
-                    cursor: (apiKey && question.trim() && !isGeminiLoading) ? 'pointer' : 'not-allowed',
+                    cursor: (question.trim() && !isGeminiLoading) ? 'pointer' : 'not-allowed',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
@@ -1147,9 +991,9 @@ ANSWER:`
             </div>
             <div>
               <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaGoogle size={11} style={{ marginRight: '4px' }} />API Status</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: apiKey ? '#4ECDC4' : '#F9CA24' }}>
-                {apiKey ? <FaCheck size={14} style={{ marginRight: '4px' }} /> : <FaTimes size={14} style={{ marginRight: '4px' }} />}
-                {apiKey ? 'Active' : 'No Key'}
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#4ECDC4' }}>
+                <FaCheck size={14} style={{ marginRight: '4px' }} />
+                Active
               </div>
             </div>
           </div>
