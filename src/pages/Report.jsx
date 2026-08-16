@@ -41,8 +41,8 @@ import './Report.css'
 // Set worker source
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`
 
-// HARDCODE YOUR API KEY HERE
-const GEMINI_API_KEY = 'AQ.Ab8RN6JXwQ1pwQpMem_mv4NP-deWVLwgfRj49sBvvMsUaHSS_A'
+// ✅ FIXED: Import API key from .env file (NOT hardcoded!)
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
 
 function Report() {
   const location = useLocation()
@@ -263,6 +263,14 @@ function Report() {
 
   // Call Gemini API with relevant context
   const callGemini = async (userQuestion, context) => {
+    // Check if API key is available
+    if (!GEMINI_API_KEY) {
+      return { 
+        success: false, 
+        error: 'API key not found. Please set VITE_GEMINI_API_KEY in your .env file.' 
+      }
+    }
+
     // Find relevant sections of the document
     const relevantContext = findRelevantContext(userQuestion, context)
     
@@ -796,7 +804,7 @@ ANSWER:`
               }}>
                 <FaGoogle size={20} style={{ color: '#4285F4' }} />
                 <span style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '14px' }}>
-                  AI Assistant Knowledge Retrival
+                  AI Assistant Knowledge Retrieval
                 </span>
                 <span style={{ fontSize: '10px', color: '#4ECDC4', background: 'rgba(78,205,196,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
                   <FaCheck size={10} style={{ marginRight: '2px' }} /> Ready
@@ -847,7 +855,7 @@ ANSWER:`
                       whiteSpace: 'pre-wrap'
                     }}>
                       <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px', color: msg.type === 'user' ? 'rgba(255,255,255,0.7)' : '#999' }}>
-                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> AI Assistant Knowledge Retrival Chatbot</>} · {msg.timestamp}
+                        {msg.type === 'user' ? <><FaUser size={10} /> You</> : <><FaRobot size={10} /> AI Assistant Knowledge Retrieval Chatbot</>} · {msg.timestamp}
                       </div>
                       {msg.content}
                     </div>
@@ -991,9 +999,12 @@ ANSWER:`
             </div>
             <div>
               <div style={{ fontSize: '11px', color: '#5a5a7a' }}><FaGoogle size={11} style={{ marginRight: '4px' }} />API Status</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: '#4ECDC4' }}>
-                <FaCheck size={14} style={{ marginRight: '4px' }} />
-                Active
+              <div style={{ fontSize: '18px', fontWeight: 700, color: GEMINI_API_KEY ? '#4ECDC4' : '#FF6B6B' }}>
+                {GEMINI_API_KEY ? (
+                  <><FaCheck size={14} style={{ marginRight: '4px' }} /> Active</>
+                ) : (
+                  <><FaTimes size={14} style={{ marginRight: '4px' }} /> No Key</>
+                )}
               </div>
             </div>
           </div>
