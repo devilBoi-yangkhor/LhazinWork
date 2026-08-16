@@ -42,7 +42,7 @@ import './Report.css'
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`
 
 // HARDCODE YOUR API KEY HERE
-const GEMINI_API_KEY = 'AQ.Ab8RN6LioLiG5LDKB-SZ4ZlWp0BkqcSepMOkl0NiiBi7tEpPZQ'
+const GEMINI_API_KEY = 'AQ.Ab8RN6JXwQ1pwQpMem_mv4NP-deWVLwgfRj49sBvvMsUaHSS_A'
 
 function Report() {
   const location = useLocation()
